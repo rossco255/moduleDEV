@@ -7,7 +7,7 @@
 //
 
 #include "Template.hpp"
-#include "pulseStreamGen.hpp"
+#include "clockProcessor.hpp"
 
 #define NUM_GENS 16        //how many pusle stream generators are used in a module
 #define NUM_OUTS 4         //how many outputs do we have
@@ -38,6 +38,6 @@ struct StormModule : Module {
     StormModule();
     void step() override;
     
-    pulseStreamGen::clockGen *clockGen;
-    pulseStreamGen::singlePulseStreamGen *singlePulseStreamGen;
+    pulseStreamGen::clockGenerator *clockGenerator;
+    pulseStreamGen::clockProcessor *clockProcessor;
 };

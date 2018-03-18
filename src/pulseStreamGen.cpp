@@ -12,7 +12,7 @@
 
 namespace pulseStreamGen {
     
-    clockGen(float BPNKnob, float ClkInput);
+    clockGen(float BPMKnob, float clkInput);
     singlePulseStreamGen(float modKnob, float pwKnob, float probKnob, float BPM);
     
     currentStep = 0;
