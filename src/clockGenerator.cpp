@@ -27,6 +27,10 @@ namespace pulseStreamGen {
     clockGenerator :: activeCLK = false;
     clockGenerator :: activeCLKPrevious = false;
     
+    void clockGenerator::isExtCLK(bool INPUT_CLOCK_active){
+        activeCLK = INPUT_CLOCK;
+    }
+    
     void clockGenerator :: clkStateChange (){
         if (activeCLK != activeCLKPrevious) {
             // Its state was changed (added or removed a patch cable to/away CLK port)?
@@ -114,5 +118,69 @@ namespace pulseStreamGen {
             previousStep = currentStep;
         }
         
+    }
+    
+    void clockGenerator:: extBPMStep(float INPUT_CLOCK){
+        float scaledInput = rescale(INPUT_CLOCK, 0.2f, 1.7f, 0.0f, 1.0f)
+        
+        currentStep++;
+        overflowBlock();
+        
+        // Using Schmitt trigger (SchmittTrigger is provided by dsp/digital.hpp) to detect thresholds from CLK input connector. Calibration: +1.7V (rising edge), low +0.2V (falling edge).
+        
+        if (CLKInputPort.process(rescale(INPUT_CLOCK, 0.2f, 1.7f, 0.0f, 1.0f))) {
+            // CLK input is receiving a compliant trigger voltage (rising edge): lit and "afterglow" CLK (red) LED.
+            findExtClkSpeed();
+            clockModulator.clkModType();
+        }
+        else {
+            // At this point, it's not a rising edge!
+            
+            // When running as multiplier, may pulse here too during low voltages on CLK input!
+            if (isSync && (nextPulseStep == currentStep) && (clockModulator.clkModulMode == clockModulator.MULT)) {
+                nextPulseStep = currentStep + round(stepGap * clockModulator.list_fRatio[clockModulator.rateRatioKnob]); // Ratio is controlled by knob.
+                // This block is to avoid continuous pulsing if no more receiving incoming signal.
+                if (clockModulator.pulseMultCounter > 0) {
+                    clockModulator.pulseMultCounter--;
+                    pulseGeneration.canPulse = true;
+                }
+                else {
+                    pulseGeneration.canPulse = false;
+                    isSync = false;
+                }
+            }
+        }
+    }
+    
+    void clockGenerator:: intBPMStep(){
+        // BPM is set by knob.
+        BPM = (knobPosition * 20);
+        if (BPM < 30)
+            BPM = 30; // Minimum BPM is 30.
+        
+        if (previousBPM == BPM) {
+            // Incrementing step counter...
+            currentStep++;
+            overflowBlock();
+            if (currentStep >= nextPulseStep) {
+                // Current step is greater than... next step: senting immediate pulse (if unchanged BPM by knob).
+                nextPulseStep = currentStep;
+                pulseGeneration.canPulse = true;
+            }
+            
+            if (pulseGeneration.canPulse) {
+                // Setting pulse...
+                // Define the step for next pulse. Time reference is given by (current) engine samplerate setting.
+                nextPulseStep = round(60.0f * engineGetSampleRate() / BPM);
+                // Define the pulse duration (fixed or variable-length).
+                pulseGeneration.pulseDuration = pulseGeneration.GetPulsingTime(engineGetSampleRate(), 60.0f / BPM);
+                currentStep = 0;
+            }
+            else{
+                currentStep = 0;
+                nextPulseStep = 0;
+            }
+        }
+        previousBPM = BPM;
     }
 }

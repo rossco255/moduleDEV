@@ -21,12 +21,6 @@ namespace pulseStreamGen {
     clockProcessor :: canPulse = false;
     clockProcessor :: pulseDuration = 0.001f;
     
-    
-    float clockProcessor :: GetPulsingTime(unsigned long int stepGap, float rate) {
-        float pTime = 0.001; // As default "degraded-mode/replied" pulse duration is set to 1ms (also can be forced to "fixed 1ms" via SETUP).
-        return pTime;
-    }
-    
     void clockProcessor :: clkModType(){
         switch (clkModulMode) {
             case X1:

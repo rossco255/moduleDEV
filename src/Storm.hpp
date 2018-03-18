@@ -22,7 +22,7 @@ struct StormModule : Module {
         NUM_PARAMS
     };
     enum InputIds {
-        BPM_INPUT,
+        CLK_INPUT,
         NUM_INPUTS
     };
     enum OutputIds {
@@ -38,6 +38,6 @@ struct StormModule : Module {
     StormModule();
     void step() override;
     
-    pulseStreamGen::clockGenerator *clockGenerator;
-    pulseStreamGen::clockProcessor *clockProcessor;
+    pulseStreamGen::clockGenerator *MasterClockGenerator;
+    pulseStreamGen::clockProcessor *processor[NUM_GENS];
 };

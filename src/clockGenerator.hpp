@@ -23,6 +23,7 @@ namespace pulseStreamGen {
         unsigned long stepGapPrevious;
         
         bool isSync;
+        void isExtCLK(float);
         
         void clkStateChange ();
         void intOrExtClk ();
