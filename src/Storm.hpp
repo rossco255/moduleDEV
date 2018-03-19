@@ -5,7 +5,7 @@
 //  Created by Ross Cameron on 17/03/2018.
 //  Copyright © 2018 Ross Cameron. All rights reserved.
 //
-
+/*
 #include "Template.hpp"
 #include "clockProcessor.hpp"
 
@@ -41,3 +41,4 @@ struct StormModule : Module {
     pulseStreamGen::clockGenerator *MasterClockGenerator;
     pulseStreamGen::clockProcessor *processor[NUM_GENS];
 };
+ */
