@@ -12,35 +12,7 @@
 #include <cstring>
 #include <util/math.hpp>
 
-
-#define NUM_GENS 4        //how many pusle stream generators are used in a module
-#define NUM_OUTS 1         //how many outputs do we have
-
-struct Drizzle : Module {
-    enum ParamIds {
-        ENUMS(DIV_PARAM, NUM_GENS),
-        ENUMS(PW_PARAM, NUM_GENS),
-        ENUMS(PROB_PARAM, NUM_GENS),
-        NUM_PARAMS
-    };
-    enum InputIds {
-        CLK_INPUT,
-        NUM_INPUTS
-    };
-    enum OutputIds {
-        ENUMS(STREAM_OUTPUT, NUM_OUTS),
-        NUM_OUTPUTS
-    };
-    enum LightIds {
-        ENUMS(FINAL_LIGHT, NUM_OUTS),
-        NUM_LIGHTS
-    };
-    
-   
-    
-    
-    
-    
+struct streamGen{
     unsigned long currentStep = 0;
     unsigned long previousStep = 0;
     unsigned long nextPulseStep = 0;
@@ -85,19 +57,23 @@ struct Drizzle : Module {
     };      // This custom function returns pulse duration (ms), regardling number of samples (unsigned long int) and pulsation duration parameter (SETUP).
     
     //probGate -- weighted coin toss which determines if a gate is sent to output
-   
-    /*
-    unsigned int probKnob = 1;
-    SchmittTrigger gateTrigger;
-    bool outcome = false;
-    float r;
-    float threshold;
-    bool toss;
-    */
     
-    Drizzle() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
+    /*
+     unsigned int probKnob = 1;
+     SchmittTrigger gateTrigger;
+     bool outcome = false;
+     float r;
+     float threshold;
+     bool toss;
+     */
+  
+    
+    float streamOutput = 0;
+    
+    streamGen(){
         
     }
+    
     
     void clkStateChange(){
         if (activeCLK != activeCLKPrevious) {
@@ -134,9 +110,9 @@ struct Drizzle : Module {
                 BPM = 30; // Minimum BPM is 30.
         }
     }
-   
     
-    void extBPMStep(){
+    
+    void extBPMStep(float CLK_INPUT){
         
         currentStep++;
         if ((currentStep > 4000000000) && (previousStep > 4000000000)) {
@@ -151,7 +127,7 @@ struct Drizzle : Module {
         
         // Using Schmitt trigger (SchmittTrigger is provided by dsp/digital.hpp) to detect thresholds from CLK input connector. Calibration: +1.7V (rising edge), low +0.2V (falling edge).
         
-        if (CLKInputPort.process(rescale(inputs[CLK_INPUT].value, 0.2f, 1.7f, 0.0f, 1.0f))) {
+        if (CLKInputPort.process(rescale(CLK_INPUT, 0.2f, 1.7f, 0.0f, 1.0f))) {
             // CLK input is receiving a compliant trigger voltage (rising edge): lit and "afterglow" CLK (red) LED.
             
             
@@ -257,7 +233,7 @@ struct Drizzle : Module {
                 pulseDuration = GetPulsingTime(engineGetSampleRate(), 60.0f / BPM);
                 currentStep = 0;
             }
-         
+            
         }
         previousBPM = BPM;
     }
@@ -271,33 +247,77 @@ struct Drizzle : Module {
             sendPulse.trigger(pulseDuration);
         }
         sendingOutput = sendPulse.process(1.0 / engineGetSampleRate());
-        outputs[STREAM_OUTPUT].value = sendingOutput ? 5.0f : 0.0f;
     }
     
     
+};
+
+
+
+
+#define NUM_GENS 4        //how many pusle stream generators are used in a module
+#define NUM_OUTS 1         //how many outputs do we have
+
+struct Drizzle : Module {
+    enum ParamIds {
+        ENUMS(DIV_PARAM, NUM_GENS),
+        ENUMS(PW_PARAM, NUM_GENS),
+        ENUMS(PROB_PARAM, NUM_GENS),
+        NUM_PARAMS
+    };
+    enum InputIds {
+        CLK_INPUT,
+        NUM_INPUTS
+    };
+    enum OutputIds {
+        ENUMS(STREAM_OUTPUT, NUM_OUTS),
+        NUM_OUTPUTS
+    };
+    enum LightIds {
+        ENUMS(FINAL_LIGHT, NUM_OUTS),
+        NUM_LIGHTS
+    };
     
-    void step() override{
+
+    streamGen pulseStream[NUM_GENS];
+    
+    Drizzle() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
         
-        knobPosition = params[DIV_PARAM].value;
+    }
+    void step() override;
+};
+    
+void Drizzle::step(){
+    for(int i = 0; i < NUM_GENS; i++){
+        pulseStream[i].knobPosition = params[DIV_PARAM + i].value;
 
         
-        activeCLK = inputs[CLK_INPUT].active;
+        pulseStream[i].activeCLK = inputs[CLK_INPUT].active;
 
-        clkStateChange();
+        pulseStream[i].clkStateChange();
         
-        knobFunction();
+        pulseStream[i].knobFunction();
         
-        if (activeCLK){
-            extBPMStep();
+        if (pulseStream[i].activeCLK){
+            pulseStream[i].extBPMStep(inputs[CLK_INPUT].value);
         }
         else{
-            intBPMStep();
+            pulseStream[i].intBPMStep();
         }
         
-        pulseGenStep();
-        
+        pulseStream[i].pulseGenStep();
+        pulseStream[i].streamOutput = pulseStream[i].sendingOutput ? 5.0f : 0.0f;
+
     }
-        
+    
+    float gateSUM= 0;
+    
+    for (int i = 0; i < NUM_GENS; i++){
+        gateSUM += pulseStream[i].streamOutput;
+    }
+    
+    outputs[STREAM_OUTPUT].value = gateSUM ? 5.0f : 1.0f;
+    
 };
 
 struct DrizzleWidget : ModuleWidget {
@@ -312,12 +332,17 @@ struct DrizzleWidget : ModuleWidget {
                                  SVG::load(assetPlugin(plugin, "res/RotatingClockDivider2.svg")));
             addChild(panel);
         }
+        
+        static const float knobY[NUM_GENS] = {70, 140, 210, 280};
+        //static const float knobY[NUM_GENS] = {70};
+        for (int i = 0; i < NUM_GENS; i++){
+            addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, knobY[i]), module, Drizzle::DIV_PARAM + i, 0.0, 24.0, 12.0));
+        }
         // Ratio/BPM knob: 12.0 is the default (x1) centered knob position/setting, 25 possible settings for ratio or BPM.
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 106), module, Drizzle::DIV_PARAM, 0.0, 24.0, 12.0));
         // Input ports (golden jacks).
-        addInput(Port::create<PJ301MPort>(Vec(24, 215), Port::INPUT, module, Drizzle::CLK_INPUT));
+        addInput(Port::create<PJ301MPort>(Vec(24, 20), Port::INPUT, module, Drizzle::CLK_INPUT));
         // Output ports (golden jacks).
-        addOutput(Port::create<PJ301MPort>(Vec(24, 262), Port::OUTPUT, module, Drizzle::STREAM_OUTPUT));
+        addOutput(Port::create<PJ301MPort>(Vec(24, 310), Port::OUTPUT, module, Drizzle::STREAM_OUTPUT));
         
     }
 };
