@@ -23,6 +23,8 @@ struct streamGen{
     
     bool isSync = false;
     
+    int knobMode = 0;
+    
     ///intBPMGen
     float knobPosition = 12.0f;
     unsigned int BPM = 120;
@@ -51,9 +53,9 @@ struct streamGen{
     PulseGenerator sendPulse;
     bool sendingOutput = false; // These flags are related to "sendPulse" pulse generator (current pulse state).
     bool canPulse = false;
-    float pulseDuration = 0.001f;
+    float pulseDuration = 0.1f;
     float GetPulsingTime(unsigned long int stepGap, float rate){
-        float pTime = 0.001; // As default "degraded-mode/replied" pulse duration is set to 1ms (also can be forced to "fixed 1ms" via SETUP).
+        float pTime = 0.1; // As default "degraded-mode/replied" pulse duration is set to 1ms (also can be forced to "fixed 1ms" via SETUP).
         return pTime;
     };      // This custom function returns pulse duration (ms), regardling number of samples (unsigned long int) and pulsation duration parameter (SETUP).
     
@@ -264,6 +266,7 @@ int row_size = sqrt(NUM_GENS);
 
 struct Storm : Module {
     enum ParamIds {
+        MODE_PARAM,
         ENUMS(DIV_PARAM, NUM_GENS),
         ENUMS(PW_PARAM, NUM_GENS),
         ENUMS(PROB_PARAM, NUM_GENS),
@@ -283,6 +286,8 @@ struct Storm : Module {
         NUM_LIGHTS
     };
     
+    SchmittTrigger modeTrigger;
+    int masterKnobMode = 0;
     
     streamGen pulseStream[NUM_GENS];
     
@@ -294,6 +299,9 @@ struct Storm : Module {
 
 void Storm::step(){
     
+    if (modeTrigger.process(params[MODE_PARAM].value)){
+        masterKnobMode = (masterKnobMode + 1) % 2;
+    }
     
     
     for(int i = 0; i < NUM_GENS; i++){
@@ -339,19 +347,18 @@ void Storm::step(){
   
     for (int i = 0; i < NUM_OUTS; i++)
     {
-        outputs[STREAM_OUTPUT + i].value = gateSUM[i] ? 5.0f : 1.0f;
+        outputs[STREAM_OUTPUT + i].value = gateSUM[i] ? 7.0f : 0.0f;
         lights[FINAL_LIGHT + i].setBrightnessSmooth(gateSUM[i] ? 1.0f : 0.0f);
-        lights[FINAL_LIGHT + i].value = gateSUM[i] ? 1.0f : 0;
-        lights[FINAL_LIGHT + i].value *= 1.0 - engineGetSampleTime() * 15.0;
     }
     
 };
 
 struct StormWidget : ModuleWidget {
-    StormWidget(Storm *module);
-};
-
-StormWidget::StormWidget(Storm *module) : ModuleWidget(module) {
+    ParamWidget *divParam;
+    ParamWidget *probParam;
+    //ParamWidget *pwParam;
+    
+    StormWidget(Storm *module) : ModuleWidget(module) {
     
         box.size = Vec(20 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
         
@@ -363,58 +370,45 @@ StormWidget::StormWidget(Storm *module) : ModuleWidget(module) {
             addChild(panel);
         }
         
-        
-        /*
-        // Ratio/BPM knob: 12.0 is the default (x1) centered knob position/setting, 25 possible settings for ratio or BPM.
-        int knob_count = 0;
-
-        float posX[row_size + 1];
-        float posY[row_size + 1];
-        int knobXSpacing = 50;
-        int knobYSpacing = 70;
-        for (int i = 0; i < (row_size + 1); i++){
-            posX[i] = 20 + (i * knobXSpacing);
-            posY[i] = 70 + (i * knobYSpacing);
-        }
-        //static const float knobX[row_size] = {20, 70, 120, 170};
-        //static const float knobY[row_size] = {70, 140, 210, 280};
-        for (int i = 0; i < NUM_GENS; i+= row_size){
-            for (int j = i; j < (i + row_size); j++){
-                addParam(ParamWidget::create<RoundBlackKnob>(Vec(posX[i], posY[j]), module, Storm::DIV_PARAM + knob_count, 0.0, 24.0, 12.0));
-                knob_count++;
-            }
-        }
-        // Input ports (golden jacks).
-        addInput(Port::create<PJ301MPort>(Vec(24, 20), Port::INPUT, module, Storm::CLK_INPUT));
-        // Output ports (golden jacks).
-        for (int i = 0; i < row_size; i++){
-            addOutput(Port::create<PJ301MPort>(Vec(posX[row_size + 1], posY[i]), Port::OUTPUT, module, Storm::STREAM_OUTPUT + i));
-        }
-        for (int i = row_size; i < NUM_OUTS; i++)
-        {
-            addOutput(Port::create<PJ301MPort>(Vec(posX[i-row_size], posY[row_size + 1]), Port::OUTPUT, module, Storm::STREAM_OUTPUT));
-
-        }
-        */
-        
+        addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Storm::MODE_PARAM, 0.0, 1.0, 0.0));
         
         // Ratio/BPM knob: 12.0 is the default (x1) centered knob position/setting, 25 possible settings for ratio or BPM.
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 70), module, Storm::DIV_PARAM, 0.0, 24.0, 12.0));
+        divParam = ParamWidget::create<RoundBlackKnob>(Vec(20, 70), module, Storm::DIV_PARAM, 0.0, 24.0, 12.0);
+        addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 70), module, Storm::DIV_PARAM + 1, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 70), module, Storm::DIV_PARAM + 2, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 70), module, Storm::DIV_PARAM + 3, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 140), module, Storm::DIV_PARAM + 4, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 140), module, Storm::DIV_PARAM + 5, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 140), module, Storm::DIV_PARAM + 6, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 140), module, Storm::DIV_PARAM + 7, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 210), module, Storm::DIV_PARAM + 8, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 210), module, Storm::DIV_PARAM + 9, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 210), module, Storm::DIV_PARAM + 10, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 210), module, Storm::DIV_PARAM + 11, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 280), module, Storm::DIV_PARAM + 12, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 280), module, Storm::DIV_PARAM + 13, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 280), module, Storm::DIV_PARAM + 14, 0.0, 24.0, 12.0));
+        //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 280), module, Storm::DIV_PARAM + 15, 0.0, 24.0, 12.0));
+        //addParam(divParam);
+        probParam = ParamWidget::create<Rogan3PSRed>(Vec(20, 70), module, Storm::PROB_PARAM, 0.0, 24.0, 12.0);
+        addParam(probParam);
+
+        
         
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 68), module, Storm::GEN_LIGHT));
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 68), module, Storm::GEN_LIGHT + 1));
@@ -455,10 +449,18 @@ StormWidget::StormWidget(Storm *module) : ModuleWidget(module) {
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 328), module, Storm::GEN_LIGHT + 6));
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 328), module, Storm::GEN_LIGHT + 7));
 
-
-
-
     }
+    
+    void step() override {
+        Storm *module = dynamic_cast<Storm*>(this->module);
+        
+        divParam->visible = (module->masterKnobMode == 0);
+        probParam->visible = (module->masterKnobMode == 1);
+        
+        
+        ModuleWidget::step();
+    }
+};
 
 Model *modelStorm = Model::create<Storm, StormWidget>("moduleDEV", "Storm", "Storm", CLOCK_TAG, CLOCK_MODULATOR_TAG, SEQUENCER_TAG); // CLOCK_MODULATOR_TAG introduced in 0.6 API.
 
