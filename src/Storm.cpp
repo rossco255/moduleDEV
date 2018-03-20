@@ -23,6 +23,11 @@ struct streamGen{
     
     bool isSync = false;
     
+    bool muteState = true;
+    SchmittTrigger muteTrigger;
+    
+  
+    
     ///intBPMGen
     float knobPosition = 12.0f;
     unsigned int BPM = 120;
@@ -51,11 +56,19 @@ struct streamGen{
     PulseGenerator sendPulse;
     bool sendingOutput = false; // These flags are related to "sendPulse" pulse generator (current pulse state).
     bool canPulse = false;
+    unsigned int pulseWidth = 0;
+    enum PulseDurations {
+        FIXED1MS,
+        FIXED5MS,       //fixed 5ms.
+        FIXED100MS,    // Fixed 100 ms.
+        GATE25,    // Gate 1/4 (25%).
+        GATE33,    // Gate 1/3 (33%).
+        SQUARE,    // Square waveform.
+        GATE66,    // Gate 2/3 (66%).
+        GATE75,    // Gate 3/4 (75%).
+        GATE95,    // Gate 95%.
+    };
     float pulseDuration = 0.1f;
-    float GetPulsingTime(unsigned long int stepGap, float rate){
-        float pTime = 0.1; // As default "degraded-mode/replied" pulse duration is set to 1ms (also can be forced to "fixed 1ms" via SETUP).
-        return pTime;
-    };      // This custom function returns pulse duration (ms), regardling number of samples (unsigned long int) and pulsation duration parameter (SETUP).
     
     //probGate -- weighted coin toss which determines if a gate is sent to output
     
@@ -71,6 +84,48 @@ struct streamGen{
     streamGen(){
         
     }
+    
+    void muteSwitchCheck(float muteParam){
+        if (muteTrigger.process(muteParam)){
+            muteState ^= true;
+        }
+    }
+    
+    float GetPulsingTime(unsigned long int stepGap, float rate){
+        float pTime = 0.1; // As default "degraded-mode/replied" pulse duration is set to 1ms (also can be forced to "fixed 1ms" via SETUP).
+        if (stepGap == 0) {
+            pTime = 0.1;
+        }
+        else {
+            // Reference duration in number of samples (when known stepGap). Variable-length pulse duration can be defined.
+            switch (pulseWidth) {
+                case FIXED5MS:
+                    pTime = 0.005f;    // Fixed 5 ms pulse.
+                    break;
+                case FIXED100MS:
+                    pTime = 0.1f;    // Fixed 100 ms pulse.
+                    break;
+                case GATE25:
+                    pTime = rate * 0.25f * (stepGap / engineGetSampleRate());    // Gate 1/4 (25%)
+                    break;
+                case GATE33:
+                    pTime = rate * (1.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 1/3 (33%)
+                    break;
+                case SQUARE:
+                    pTime = rate * 0.5f * (stepGap / engineGetSampleRate());    // Square wave (50%)
+                    break;
+                case GATE66:
+                    pTime = rate * (2.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 2/3 (66%)
+                    break;
+                case GATE75:
+                    pTime = rate * 0.75f * (stepGap / engineGetSampleRate());    // Gate 3/4 (75%)
+                    break;
+                case GATE95:
+                    pTime = rate * 0.95f * (stepGap / engineGetSampleRate());    // Gate 95%
+            }
+        }
+        return pTime;
+    }    // This custom function returns pulse duration (ms), regardling number of samples (unsigned long int) and pulsation duration parameter (SETUP).
     
     
     void clkStateChange(){
@@ -103,7 +158,7 @@ struct streamGen{
         }
         else {
             // BPM is set by knob.
-            BPM = (knobPosition * 20);
+            BPM = (knobPosition * 10);
             if (BPM < 30)
                 BPM = 30; // Minimum BPM is 30.
         }
@@ -274,8 +329,9 @@ struct Storm : Module {
     enum ParamIds {
         MODE_PARAM,
         ENUMS(DIV_PARAM, NUM_GENS),
-        ENUMS(PW_PARAM, NUM_GENS),
         ENUMS(PROB_PARAM, NUM_GENS),
+        ENUMS(PW_PARAM, NUM_GENS),
+        ENUMS(MUTE_PARAM, NUM_GENS),
         NUM_PARAMS
     };
     enum InputIds {
@@ -288,6 +344,8 @@ struct Storm : Module {
     };
     enum LightIds {
         ENUMS(GEN_LIGHT, NUM_GENS),
+        ENUMS(PROB_LIGHT, NUM_GENS),
+        ENUMS(MUTE_LIGHT, NUM_GENS),
         ENUMS(FINAL_LIGHT, NUM_OUTS),
         NUM_LIGHTS
     };
@@ -306,11 +364,12 @@ struct Storm : Module {
 void Storm::step(){
     
     if (modeTrigger.process(params[MODE_PARAM].value)){
-        masterKnobMode = (masterKnobMode + 1) % 2;
+        masterKnobMode = (masterKnobMode + 1) % 4;
     }
     
     
     for(int i = 0; i < NUM_GENS; i++){
+        pulseStream[i].pulseWidth = params[PW_PARAM + i].value;
         pulseStream[i].knobPosition = params[DIV_PARAM + i].value;
         pulseStream[i].activeCLK = inputs[CLK_INPUT].active;
         pulseStream[i].clkStateChange();
@@ -324,8 +383,11 @@ void Storm::step(){
         
         pulseStream[i].pulseGenStep();
         pulseStream[i].coinToss(params[PROB_PARAM + i].value);
-        pulseStream[i].streamOutput = pulseStream[i].sendingOutput ? 5.0f : 0.0f;
-        lights[i].setBrightnessSmooth(pulseStream[i].streamOutput / 5.0f);
+        pulseStream[i].muteSwitchCheck(params[MUTE_PARAM + i].value);
+        pulseStream[i].streamOutput =( (pulseStream[i].sendingOutput) && (pulseStream[i].muteState) )? 5.0f : 0.0f;
+        lights[GEN_LIGHT + i].setBrightnessSmooth(pulseStream[i].streamOutput / 5.0f);
+        lights[MUTE_LIGHT + i].value = (pulseStream[i].muteState);
+        lights[PROB_LIGHT + i].value = (params[PROB_PARAM + i].value);
     }
     
     float gateSUM[NUM_OUTS] = {};
@@ -351,15 +413,17 @@ void Storm::step(){
     for (int i = 0; i < NUM_OUTS; i++)
     {
         outputs[STREAM_OUTPUT + i].value = gateSUM[i] ? 7.0f : 0.0f;
-        lights[FINAL_LIGHT + i].setBrightnessSmooth(gateSUM[i] ? 1.0f : 0.0f);
+        lights[FINAL_LIGHT + i].setBrightnessSmooth(gateSUM[i] / 5.0f);
     }
     
 };
 
 struct StormWidget : ModuleWidget {
-    ParamWidget *divParam[16];
-    ParamWidget *probParam[16];
-    //ParamWidget *pwParam[16];
+    ParamWidget *divParam[NUM_GENS];
+    ParamWidget *probParam[NUM_GENS];
+    ParamWidget *pwParam[NUM_GENS];
+    ParamWidget *muteParam[NUM_GENS];
+    
     
     StormWidget(Storm *module) : ModuleWidget(module) {
     
@@ -379,30 +443,20 @@ struct StormWidget : ModuleWidget {
         static const float knobX[16] = {20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170};
         static const float knobY[16] = {70, 70, 70, 70, 140, 140, 140, 140, 210, 210, 210, 210, 280, 280, 280, 280};
         
-        for (int i = 0; i < 16; i++){
-            divParam[i] = ParamWidget::create<RoundBlackKnob>(Vec(knobX[i], knobY[i]), module, Storm::DIV_PARAM + i, 0.0, 24.0, 12.0);
+        for (int i = 0; i < NUM_GENS; i++){
+            divParam[i] = ParamWidget::create<Rogan1PSRed>(Vec(knobX[i], knobY[i]), module, Storm::DIV_PARAM + i, 0.0, 24.0, 12.0);
             addParam(divParam[i]);
             probParam[i] = ParamWidget::create<Rogan1PSWhite>(Vec(knobX[i], knobY[i]), module, Storm::PROB_PARAM + i, 0.0, 1.0, 0.0);
             addParam(probParam[i]);
+            pwParam[i] = ParamWidget::create<Rogan1PSGreenSnap>(Vec(knobX[i], knobY[i]), module, Storm::PW_PARAM + i, 0.0, 8.0, 0.0);
+            addParam(pwParam[i]);
+            muteParam[i] = ParamWidget::create<CKD6>(Vec(knobX[i] + 8, knobY[i] + 8), module, Storm::MUTE_PARAM + i, 0.0f, 1.0f, 0.0f);
+            addParam(muteParam[i]);
+            addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(knobX[i] - 2, knobY[i] - 2), module, Storm::GEN_LIGHT + i));
+            addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(knobX[i] + 40, knobY[i] - 2), module, Storm::MUTE_LIGHT + i));
+            addChild(ModuleLightWidget::create<SmallLight<BlueLight>>(Vec(knobX[i] - 2, knobY[i] + 40), module, Storm::PROB_LIGHT + i));
         }
         
-
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 68), module, Storm::GEN_LIGHT));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 68), module, Storm::GEN_LIGHT + 1));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 68), module, Storm::GEN_LIGHT + 2));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 68), module, Storm::GEN_LIGHT + 3));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 138), module, Storm::GEN_LIGHT + 4));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 138), module, Storm::GEN_LIGHT + 5));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 138), module, Storm::GEN_LIGHT + 6));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 138), module, Storm::GEN_LIGHT + 7));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 208), module, Storm::GEN_LIGHT + 8));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 208), module, Storm::GEN_LIGHT + 9));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 208), module, Storm::GEN_LIGHT + 10));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 208), module, Storm::GEN_LIGHT + 11));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 278), module, Storm::GEN_LIGHT + 12));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 278), module, Storm::GEN_LIGHT + 13));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 278), module, Storm::GEN_LIGHT + 14));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 278), module, Storm::GEN_LIGHT + 15));
 
         addInput(Port::create<PJ301MPort>(Vec(24, 20), Port::INPUT, module, Storm::CLK_INPUT));
         
@@ -416,25 +470,26 @@ struct StormWidget : ModuleWidget {
         addOutput(Port::create<PJ301MPort>(Vec(120, 330), Port::OUTPUT, module, Storm::STREAM_OUTPUT + 6));
         addOutput(Port::create<PJ301MPort>(Vec(170, 330), Port::OUTPUT, module, Storm::STREAM_OUTPUT + 7));
         
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 68), module, Storm::GEN_LIGHT));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 138), module, Storm::GEN_LIGHT + 1));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 208), module, Storm::GEN_LIGHT + 2));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 278), module, Storm::GEN_LIGHT + 3));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 68), module, Storm::FINAL_LIGHT));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 138), module, Storm::FINAL_LIGHT + 1));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 208), module, Storm::FINAL_LIGHT + 2));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(218, 278), module, Storm::FINAL_LIGHT + 3));
 
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 328), module, Storm::GEN_LIGHT + 4));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 328), module, Storm::GEN_LIGHT + 5));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 328), module, Storm::GEN_LIGHT + 6));
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 328), module, Storm::GEN_LIGHT + 7));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 328), module, Storm::FINAL_LIGHT + 4));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 328), module, Storm::FINAL_LIGHT + 5));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 328), module, Storm::FINAL_LIGHT + 6));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(168, 328), module, Storm::FINAL_LIGHT + 7));
 
     }
     
     void step() override {
         Storm *module = dynamic_cast<Storm*>(this->module);
         
-        for (int i = 0; i < 16; i++){
+        for (int i = 0; i < NUM_GENS; i++){
             divParam[i]->visible = (module->masterKnobMode == 0);
             probParam[i]->visible = (module->masterKnobMode == 1);
-
+            pwParam[i]->visible = (module->masterKnobMode == 2);
+            muteParam[i]->visible = (module->masterKnobMode == 3);
         }
         ModuleWidget::step();
     }
