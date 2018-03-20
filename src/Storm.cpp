@@ -23,8 +23,6 @@ struct streamGen{
     
     bool isSync = false;
     
-    int knobMode = 0;
-    
     ///intBPMGen
     float knobPosition = 12.0f;
     unsigned int BPM = 120;
@@ -61,14 +59,11 @@ struct streamGen{
     
     //probGate -- weighted coin toss which determines if a gate is sent to output
     
-    /*
-     unsigned int probKnob = 1;
+    
      SchmittTrigger gateTrigger;
      bool outcome = false;
-     float r;
-     float threshold;
-     bool toss;
-     */
+  
+    
     
     
     float streamOutput = 0;
@@ -252,6 +247,17 @@ struct streamGen{
         sendingOutput = sendPulse.process(1.0 / engineGetSampleRate());
     }
     
+    void coinToss(float PROB){
+        if (gateTrigger.process(sendingOutput)) {
+            // trigger
+            float r = randomUniform();
+            float threshold = clamp(PROB, 0.f, 1.f);
+            bool toss = (r < threshold);
+            outcome = toss;
+        }
+        sendingOutput = outcome ? sendingOutput : 0.0;
+    }
+    
     
 };
 
@@ -306,13 +312,9 @@ void Storm::step(){
     
     for(int i = 0; i < NUM_GENS; i++){
         pulseStream[i].knobPosition = params[DIV_PARAM + i].value;
-        
         pulseStream[i].activeCLK = inputs[CLK_INPUT].active;
-        
         pulseStream[i].clkStateChange();
-        
         pulseStream[i].knobFunction();
-        
         if (pulseStream[i].activeCLK){
             pulseStream[i].extBPMStep(inputs[CLK_INPUT].value);
         }
@@ -321,6 +323,7 @@ void Storm::step(){
         }
         
         pulseStream[i].pulseGenStep();
+        pulseStream[i].coinToss(params[PROB_PARAM + i].value);
         pulseStream[i].streamOutput = pulseStream[i].sendingOutput ? 5.0f : 0.0f;
         lights[i].setBrightnessSmooth(pulseStream[i].streamOutput / 5.0f);
     }
@@ -356,7 +359,7 @@ void Storm::step(){
 struct StormWidget : ModuleWidget {
     ParamWidget *divParam[16];
     ParamWidget *probParam[16];
-    //ParamWidget *pwParam;
+    //ParamWidget *pwParam[16];
     
     StormWidget(Storm *module) : ModuleWidget(module) {
     
@@ -366,53 +369,24 @@ struct StormWidget : ModuleWidget {
             SVGPanel *panel = new SVGPanel();
             panel->box.size = box.size;
             panel->setBackground(
-                                 SVG::load(assetPlugin(plugin, "res/RotatingClockDivider2.svg")));
+                                 SVG::load(assetPlugin(plugin, "res/Storm.svg")));
             addChild(panel);
         }
         
         addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Storm::MODE_PARAM, 0.0, 1.0, 0.0));
         
-        // Ratio/BPM knob: 12.0 is the default (x1) centered knob position/setting, 25 possible settings for ratio or BPM.
-        divParam[1] = ParamWidget::create<RoundBlackKnob>(Vec(20, 70), module, Storm::DIV_PARAM, 0.0, 24.0, 12.0);
-        addParam(divParam[1]);
-        divParam[2] = ParamWidget::create<RoundBlackKnob>(Vec(70, 70), module, Storm::DIV_PARAM + 1, 0.0, 24.0, 12.0);
-        addParam(divParam[2]);
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 70), module, Storm::DIV_PARAM + 2, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 70), module, Storm::DIV_PARAM + 3, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 140), module, Storm::DIV_PARAM + 4, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 140), module, Storm::DIV_PARAM + 5, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 140), module, Storm::DIV_PARAM + 6, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 140), module, Storm::DIV_PARAM + 7, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 210), module, Storm::DIV_PARAM + 8, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 210), module, Storm::DIV_PARAM + 9, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 210), module, Storm::DIV_PARAM + 10, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 210), module, Storm::DIV_PARAM + 11, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(20, 280), module, Storm::DIV_PARAM + 12, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 280), module, Storm::DIV_PARAM + 13, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 280), module, Storm::DIV_PARAM + 14, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 280), module, Storm::DIV_PARAM + 15, 0.0, 24.0, 12.0));
-        //addParam(divParam);
-        probParam[1] = ParamWidget::create<Rogan3PSRed>(Vec(20, 70), module, Storm::PROB_PARAM, 0.0, 24.0, 12.0);
-        addParam(probParam[1]);
-        probParam[2] = ParamWidget::create<Rogan3PSRed>(Vec(70, 70), module, Storm::PROB_PARAM + 1, 0.0, 24.0, 12.0);
-        addParam(probParam[2]);
+        
+        static const float knobX[16] = {20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170};
+        static const float knobY[16] = {70, 70, 70, 70, 140, 140, 140, 140, 210, 210, 210, 210, 280, 280, 280, 280};
+        
+        for (int i = 0; i < 16; i++){
+            divParam[i] = ParamWidget::create<RoundBlackKnob>(Vec(knobX[i], knobY[i]), module, Storm::DIV_PARAM + i, 0.0, 24.0, 12.0);
+            addParam(divParam[i]);
+            probParam[i] = ParamWidget::create<Rogan1PSWhite>(Vec(knobX[i], knobY[i]), module, Storm::PROB_PARAM + i, 0.0, 1.0, 0.0);
+            addParam(probParam[i]);
+        }
+        
 
-        
-        
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 68), module, Storm::GEN_LIGHT));
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(68, 68), module, Storm::GEN_LIGHT + 1));
         addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(118, 68), module, Storm::GEN_LIGHT + 2));
@@ -457,13 +431,11 @@ struct StormWidget : ModuleWidget {
     void step() override {
         Storm *module = dynamic_cast<Storm*>(this->module);
         
-        divParam[1]->visible = (module->masterKnobMode == 0);
-        probParam[1]->visible = (module->masterKnobMode == 1);
-        
-        divParam[2]->visible = (module->masterKnobMode == 0);
-        probParam[2]->visible = (module->masterKnobMode == 1);
-        
-        
+        for (int i = 0; i < 16; i++){
+            divParam[i]->visible = (module->masterKnobMode == 0);
+            probParam[i]->visible = (module->masterKnobMode == 1);
+
+        }
         ModuleWidget::step();
     }
 };
