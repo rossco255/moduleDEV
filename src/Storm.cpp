@@ -354,8 +354,8 @@ void Storm::step(){
 };
 
 struct StormWidget : ModuleWidget {
-    ParamWidget *divParam;
-    ParamWidget *probParam;
+    ParamWidget *divParam[16];
+    ParamWidget *probParam[16];
     //ParamWidget *pwParam;
     
     StormWidget(Storm *module) : ModuleWidget(module) {
@@ -373,9 +373,10 @@ struct StormWidget : ModuleWidget {
         addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Storm::MODE_PARAM, 0.0, 1.0, 0.0));
         
         // Ratio/BPM knob: 12.0 is the default (x1) centered knob position/setting, 25 possible settings for ratio or BPM.
-        divParam = ParamWidget::create<RoundBlackKnob>(Vec(20, 70), module, Storm::DIV_PARAM, 0.0, 24.0, 12.0);
-        addParam(divParam);
-        addParam(ParamWidget::create<RoundBlackKnob>(Vec(70, 70), module, Storm::DIV_PARAM + 1, 0.0, 24.0, 12.0));
+        divParam[1] = ParamWidget::create<RoundBlackKnob>(Vec(20, 70), module, Storm::DIV_PARAM, 0.0, 24.0, 12.0);
+        addParam(divParam[1]);
+        divParam[2] = ParamWidget::create<RoundBlackKnob>(Vec(70, 70), module, Storm::DIV_PARAM + 1, 0.0, 24.0, 12.0);
+        addParam(divParam[2]);
         //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(120, 70), module, Storm::DIV_PARAM + 2, 0.0, 24.0, 12.0));
         //addParam(divParam);
@@ -405,8 +406,10 @@ struct StormWidget : ModuleWidget {
         //addParam(divParam);
         addParam(ParamWidget::create<RoundBlackKnob>(Vec(170, 280), module, Storm::DIV_PARAM + 15, 0.0, 24.0, 12.0));
         //addParam(divParam);
-        probParam = ParamWidget::create<Rogan3PSRed>(Vec(20, 70), module, Storm::PROB_PARAM, 0.0, 24.0, 12.0);
-        addParam(probParam);
+        probParam[1] = ParamWidget::create<Rogan3PSRed>(Vec(20, 70), module, Storm::PROB_PARAM, 0.0, 24.0, 12.0);
+        addParam(probParam[1]);
+        probParam[2] = ParamWidget::create<Rogan3PSRed>(Vec(70, 70), module, Storm::PROB_PARAM + 1, 0.0, 24.0, 12.0);
+        addParam(probParam[2]);
 
         
         
@@ -454,8 +457,11 @@ struct StormWidget : ModuleWidget {
     void step() override {
         Storm *module = dynamic_cast<Storm*>(this->module);
         
-        divParam->visible = (module->masterKnobMode == 0);
-        probParam->visible = (module->masterKnobMode == 1);
+        divParam[1]->visible = (module->masterKnobMode == 0);
+        probParam[1]->visible = (module->masterKnobMode == 1);
+        
+        divParam[2]->visible = (module->masterKnobMode == 0);
+        probParam[2]->visible = (module->masterKnobMode == 1);
         
         
         ModuleWidget::step();
