@@ -5,7 +5,7 @@
 //  Created by Ross Cameron on 18/03/2018.
 //  Copyright © 2018 Ross Cameron. All rights reserved.
 //
-
+/*
 #include "Drizzle.hpp"
 #include "Template.hpp"
 #include <dsp/digital.hpp>
@@ -58,14 +58,14 @@ struct streamGen{
     
     //probGate -- weighted coin toss which determines if a gate is sent to output
     
-    /*
-     unsigned int probKnob = 1;
-     SchmittTrigger gateTrigger;
-     bool outcome = false;
-     float r;
-     float threshold;
-     bool toss;
-     */
+
+     //unsigned int probKnob = 1;
+    // SchmittTrigger gateTrigger;
+     //bool outcome = false;
+     //float r;
+     //float threshold;
+     //bool toss;
+ 
   
     
     float streamOutput = 0;
@@ -110,7 +110,7 @@ struct streamGen{
                 BPM = 30; // Minimum BPM is 30.
         }
     }
-    
+
     
     void extBPMStep(float CLK_INPUT){
         
@@ -348,4 +348,4 @@ struct DrizzleWidget : ModuleWidget {
 };
 
 Model *modelDrizzle = Model::create<Drizzle, DrizzleWidget>("moduleDEV", "Drizzle", "Drizzle", CLOCK_TAG, CLOCK_MODULATOR_TAG, SEQUENCER_TAG); // CLOCK_MODULATOR_TAG introduced in 0.6 API.
-
+*/

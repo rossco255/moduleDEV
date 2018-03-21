@@ -11,3 +11,4 @@ extern Plugin *plugin;
 extern Model *modelSequentialSwitch;
 //extern Model *modelRiotJr;
 extern Model *modelStorm;
+//extern Model *modelDrizzle;
