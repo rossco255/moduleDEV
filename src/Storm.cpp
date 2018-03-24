@@ -8,6 +8,43 @@
 
 #include "Storm.hpp"
 
+
+float phase = 0.0f;
+float pw = 0.5f;
+float freq = 1.0f;
+void setFreq(float freq_to_set)
+{
+    freq = freq_to_set;
+};
+void LFOstep(float dt){
+    float deltaPhase = fminf(freq * dt, 0.5f);
+    phase += deltaPhase;
+    if (phase >= 1.0f)
+        phase -= 1.0f;
+};
+float sqr() {
+    float sqr = phase < pw ? 1.0f : -1.0f;
+    return sqr;
+};
+int tempo = 0;
+float frequency = 2.0f;
+float clockOutputValue = 0;
+void internalClkStep(float tempoParam)
+{
+    tempo = roundf(tempoParam);
+    frequency = tempo/60.0f;
+    setFreq(frequency*4);
+    LFOstep(1.0 / engineGetSampleRate());
+    clockOutputValue = clamp(5.0f * sqr(), 0.0f, 5.0f);
+};
+
+
+
+
+
+
+
+
 struct Storm : Module {
     
 #define NUM_GENS 16        //how many pusle stream generators are used in a module
@@ -46,21 +83,26 @@ struct Storm : Module {
     
     SchmittTrigger clkSwitchTrigger;
     bool clkSwitchParam = true;
- 
+    
+    bool extClockConnected = false;
+    bool clockSynced = true;
+    
     pulseStreamGen::streamGen *pulseStream[NUM_GENS];
     
     Storm() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
         for (int i = 0; i < NUM_GENS; i++)
         {
-            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, inputs[CLK_INPUT].active);
+            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, clockSynced);
         }
     }
-    
     void step() override;
 };
 
+
 void Storm::step(){
     
+    internalClkStep(params[MASTERCLK_PARAM].value);
+
     if (clkSwitchTrigger.process(params[CLKSWITCH_PARAM].value)){
         clkSwitchParam ^= true;
     }
@@ -69,23 +111,47 @@ void Storm::step(){
         masterKnobMode = (masterKnobMode + 1) % 4;
     }
     
+    if (inputs[CLK_INPUT].active) {
+        extClockConnected = true;
+        clockSynced = true;
+    }
+    
+    else if (clkSwitchParam){
+        extClockConnected = false;
+        clockSynced = true;
+    }
+    
+    else{
+        extClockConnected = false;
+        clockSynced = false;
+    }
+    
     
     for(int i = 0; i < NUM_GENS; i++){
-        pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
-        pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
-        pulseStream[i]->activeCLK = inputs[CLK_INPUT].active;
-        pulseStream[i]->clkStateChange();
-        pulseStream[i]->knobFunction();
-        
-        if (pulseStream[i]->activeCLK){
+       
+        if (extClockConnected){
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = inputs[CLK_INPUT].active;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
             pulseStream[i]->extBPMStep(inputs[CLK_INPUT].value);
         }
         
-        /*else if(clkSwitchParam){
-            still need to sort out the internal BPM clock for in here
-            
-        }*/
+        else if(clkSwitchParam){
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = clkSwitchParam;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
+            pulseStream[i]->extBPMStep(clockOutputValue);
+        }
         else{
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = clkSwitchParam;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
             pulseStream[i]->intBPMStep();
         }
         
@@ -147,7 +213,7 @@ struct StormWidget : ModuleWidget {
         
         addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Storm::MODE_PARAM, 0.0, 1.0, 0.0));
         addParam(ParamWidget::create<TL1105>(Vec(100, 20), module, Storm::CLKSWITCH_PARAM, 0.0, 1.0, 0.0));
-        addParam(ParamWidget::create<Rogan1PSRed>(Vec(170, 20), module, Storm::MASTERCLK_PARAM, 0.0, 24.0, 12.0));
+        addParam(ParamWidget::create<Rogan1PSRed>(Vec(170, 20), module, Storm::MASTERCLK_PARAM, 40.0f, 250.0f, 120.0f));
         addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(168, 18), module, Storm::MASTERCLK_LIGHT));
 
         
