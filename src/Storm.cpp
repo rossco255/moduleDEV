@@ -356,6 +356,7 @@ struct Storm : Module {
     bool clkSwitchParam = true;
     
     streamGen masterClock;
+    SchmittTrigger internalClock;
  
     streamGen pulseStream[NUM_GENS];
     
@@ -366,8 +367,7 @@ struct Storm : Module {
 };
 
 void Storm::step(){
-    masterClock.pulseWidth = 2.0;
-    masterClock.activeCLK = false;
+    masterClock.pulseWidth = 1.0;
     
     if (clkSwitchTrigger.process(params[CLKSWITCH_PARAM].value)){
         clkSwitchParam ^= true;
@@ -378,9 +378,11 @@ void Storm::step(){
     }
     
     masterClock.knobPosition = params[MASTERCLK_PARAM].value;
+    masterClock.activeCLK = false;
     masterClock.knobFunction();
     masterClock.intBPMStep();
     masterClock.pulseGenStep();
+    masterClock.streamOutput = masterClock.sendingOutput ? 10.0f : 0.0f;
     
     for(int i = 0; i < NUM_GENS; i++){
         pulseStream[i].pulseWidth = params[PW_PARAM + i].value;
@@ -393,8 +395,11 @@ void Storm::step(){
             pulseStream[i].extBPMStep(inputs[CLK_INPUT].value);
         }
         else if(clkSwitchParam){
+            pulseStream[i].activeCLK = internalClock.process(masterClock.streamOutput);
+            pulseStream[i].clkStateChange();
+            pulseStream[i].knobFunction();
+            pulseStream[i].extBPMStep(masterClock.streamOutput);
             lights[MASTERCLK_LIGHT].setBrightnessSmooth(masterClock.sendingOutput / 2.0f);
-            pulseStream[i].extBPMStep(masterClock.sendingOutput);
             
         }
         else{
@@ -458,12 +463,12 @@ struct StormWidget : ModuleWidget {
         }
         
         addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Storm::MODE_PARAM, 0.0, 1.0, 0.0));
-        addParam(ParamWidget::create<TL1105>(Vec(100, 20), module, Storm::CLKSWITCH_PARAM, 0.0, 1.0, 1.0));
-        addParam(ParamWidget::create<Rogan1PSRed>(Vec(120, 30), module, Storm::MASTERCLK_PARAM, 0.0, 24.0, 12.0));
-        addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(118, 28), module, Storm::MASTERCLK_LIGHT));
+        addParam(ParamWidget::create<TL1105>(Vec(100, 20), module, Storm::CLKSWITCH_PARAM, 0.0, 1.0, 0.0));
+        addParam(ParamWidget::create<Rogan1PSRed>(Vec(170, 20), module, Storm::MASTERCLK_PARAM, 0.0, 24.0, 12.0));
+        addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(168, 18), module, Storm::MASTERCLK_LIGHT));
 
         
-        static const float knobX[16] = {20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170, 20, 70, 120, 170};
+        static const float knobX[16] = {20, 80, 160, 230, 20, 90, 160, 230, 20, 90, 160, 230, 20, 90, 160, 230};
         static const float knobY[16] = {70, 70, 70, 70, 140, 140, 140, 140, 210, 210, 210, 210, 280, 280, 280, 280};
         
         for (int i = 0; i < NUM_GENS; i++){
