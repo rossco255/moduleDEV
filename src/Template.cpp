@@ -13,6 +13,7 @@ void init(rack::Plugin *p) {
     p->addModel(modelSequentialSwitch);
     p->addModel(modelStorm);
     p->addModel(modelDrizzle);
+    p->addModel(modelpercvoice);
 
 
 	// Any other plugin initialization may go here.

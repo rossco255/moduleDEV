@@ -10,3 +10,4 @@ extern Plugin *plugin;
 extern Model *modelSequentialSwitch;
 extern Model *modelStorm;
 extern Model *modelDrizzle;
+extern Model *modelpercvoice;

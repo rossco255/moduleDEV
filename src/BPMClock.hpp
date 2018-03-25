@@ -6,9 +6,31 @@
 //  Copyright © 2018 Ross Cameron. All rights reserved.
 //
 
-#ifndef BPMClock_hpp
-#define BPMClock_hpp
 
-#include <stdio.h>
+//**************************************************************************************
+//
+//BPM Clock module for VCV Rack by Alfredo Santamaria - AS - https://github.com/AScustomWorks/AS
+//
+//Based on code taken from Master Clock Module VCV Module Strum 2017 https://github.com/Strum/Strums_Mental_VCV_Modules
+//**************************************************************************************
 
-#endif /* BPMClock_hpp */
+#include "Template.hpp"
+#include "dsp/digital.hpp"
+#include <sstream>
+#include <iomanip>
+
+namespace internalClock {
+    struct BPMClock {
+        BPMClock ( );
+        float phase;
+        float pw;
+        float freq;
+        void setFreq( float );
+        void LFOstep ( float );
+        float sqr( );
+        int tempo;
+        float frequency;
+        float clockOutputValue;
+        void step(float);
+    };
+}

@@ -38,13 +38,6 @@ void internalClkStep(float tempoParam)
     clockOutputValue = clamp(5.0f * sqr(), 0.0f, 5.0f);
 };
 
-
-
-
-
-
-
-
 struct Storm : Module {
     
 #define NUM_GENS 16        //how many pusle stream generators are used in a module
