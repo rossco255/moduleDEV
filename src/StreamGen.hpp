@@ -9,10 +9,9 @@
 #include "Template.hpp"
 #include <dsp/digital.hpp>
 #include <cstring>
-
 #include "dsp/samplerate.hpp"
 #include "dsp/ringbuffer.hpp"
-#include "../../Fundamental/dep/include/samplerate.h"
+#include "../dep/include/samplerate.h"
 #include <sstream>
 #include <iomanip>
 #define HISTORY_SIZE (1<<21)
@@ -83,22 +82,46 @@ namespace pulseStreamGen {
         void intBPMStep( );
         void pulseGenStep( );
         void coinToss(float);
-    };
-	
-	struct pulseDelay {
-		pulseDelay (float, float);		//pulse input and delay time
+		
+		
+		void pulseDelay(float, float);
+		//pulseDelay (float, float);		//pulse input and delay time
+		/*
+		 unsigned long stepGap;
+		 float pTime;
+		 unsigned int pulseWidth;
+		 float list_fRatio[25] = {64.0f, 32.0f, 16.0f, 10.0f, 9.0f, 8.0f, 7.0f, 6.0f, 5.0f, 4.0f, 3.0f, 2.0f, 1.0f, 0.5f, 1.0f/3.0f, 0.25f, 0.2f, 1.0f/6.0f, 1.0f/7.0f, 0.125f, 1.0f/9.0f, 0.1f, 0.0625f, 0.03125f, 0.015625f};
+		 enum ClkModModeIds {
+		 X1,    // work at x1.
+		 DIV,    // divider mode.
+		 MULT    // muliplier mode.
+		 };
+		 enum PulseDurations {
+		 FIXED5MS,
+		 FIXED25MS,       //fixed 5ms.
+		 FIXED100MS,    // Fixed 100 ms.
+		 GATE25,    // Gate 1/4 (25%).
+		 GATE33,    // Gate 1/3 (33%).
+		 SQUARE,    // Square waveform.
+		 GATE66,    // Gate 2/3 (66%).
+		 GATE75,    // Gate 3/4 (75%).
+		 GATE95,    // Gate 95%.
+		 };
+		 float GetPulsingTime(unsigned long int, float);
+		 */
 		
 		DoubleRingBuffer<float, HISTORY_SIZE> historyBuffer;
 		DoubleRingBuffer<float, 16> outBuffer;
 		SRC_STATE *src;
 		SRC_DATA srcData;
-
-		void process( );
+		
+		//void process( );
 		
 		float in;
 		float delay;
 		float index;
 		float consume;
 		float wet;
-	};
+		
+    };
 }

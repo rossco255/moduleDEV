@@ -290,20 +290,19 @@ namespace pulseStreamGen {
         sendingOutput = outcome ? sendingOutput : 0.0;
     }
 	
-	pulseDelay::pulseDelay (float delayParamValue, float streamOutput){
+	void streamGen::pulseDelay (float delayParamValue, float streamOutput){
 		in = streamOutput;
-		delay = clamp(delayParamValue, 0.001f, 10.0f);
-	}
-	
-	void pulseDelay::process(){
+		//int delayInt = clamp(delayParamValue, 0.0f, 5.0f);
+		//delay = GetPulsingTime(stepGap, list_fRatio[delayInt]);
+		delay = delayParamValue;
 		index = delay * engineGetSampleRate();
-
+		
 		if (!historyBuffer.full()) {
 			historyBuffer.push(in);
 		}
-
+		
 		consume = index - historyBuffer.size();
-
+		
 		if (outBuffer.empty()) {
 			double ratio = 1.f;
 			if (fabsf(consume) >= 16.f) {

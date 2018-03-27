@@ -7,12 +7,6 @@
 //
 
 #include "Storm.hpp"
-/*#include "dsp/samplerate.hpp"
-#include "dsp/ringbuffer.hpp"
-#include "samplerate.h"
-
-#include <sstream>
-#include <iomanip>*/
 
 #define HISTORY_SIZE (1<<21)
 
@@ -61,23 +55,23 @@ struct Storm : Module {
     bool clockSynced = true;
     
     pulseStreamGen::streamGen *pulseStream[NUM_GENS];
-	pulseStreamGen::pulseDelay *streamDelay[NUM_GENS];
+	//pulseStreamGen::pulseDelay *streamDelay[NUM_GENS];
     internalClock::BPMClock internalClk;
 	
     Storm() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
         for (int i = 0; i < NUM_GENS; i++)
         {
             pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, clockSynced, params[DELAY_PARAM + i].value);
-			streamDelay[i] = new pulseStreamGen::pulseDelay(params[DELAY_PARAM + i].value, pulseStream[i]->streamOutput);
-			streamDelay[i]->src = src_new(SRC_SINC_FASTEST, 1, NULL);
-			assert(streamDelay[i]->src);
+			//streamDelay[i] = new pulseStreamGen::pulseDelay(params[DELAY_PARAM + i].value, pulseStream[i]->streamOutput);
+			pulseStream[i]->src = src_new(SRC_SINC_FASTEST, 1, NULL);
+			assert(pulseStream[i]->src);
         }
     }
 	
 	~Storm() {
 		for (int i = 0; i < NUM_GENS; i++)
 		{
-			src_delete(streamDelay[i]->src);
+			src_delete(pulseStream[i]->src);
 		}
 	}
 	
@@ -145,10 +139,10 @@ void Storm::step(){
         pulseStream[i]->muteSwitchCheck(params[MUTE_PARAM + i].value);
 		pulseStream[i]->streamOutput = ( (pulseStream[i]->sendingOutput) && (pulseStream[i]->muteState) )? 5.0f : 0.0f;
 		//streamDelay[i]->in =( (pulseStream[i]->sendingOutput) && (pulseStream[i]->muteState) )? 5.0f : 0.0f;
-		streamDelay[i]->in = pulseStream[i]->streamOutput;
-		streamDelay[i]->delay = clamp(params[DELAY_PARAM + i].value, 0.001f, 10.0f);
-		streamDelay[i]->process();
-		pulseStream[i]->streamOutput = streamDelay[i]->wet;
+		//pulseStream[i]->in = pulseStream[i]->streamOutput;
+		//pulseStream[i]->delay = clamp(params[DELAY_PARAM + i].value, 0.0f, 5.0f);
+		pulseStream[i]->pulseDelay(params[DELAY_PARAM + i].value, pulseStream[i]->streamOutput);
+		pulseStream[i]->streamOutput = pulseStream[i]->wet;
         lights[GEN_LIGHT + i].setBrightnessSmooth(pulseStream[i]->streamOutput / 5.0f);
         lights[MUTE_LIGHT + i].value = (pulseStream[i]->muteState);
         lights[PW_LIGHT + i].value = (params[PW_PARAM + i].value / 8.0f);
@@ -223,7 +217,7 @@ struct StormWidget : ModuleWidget {
             addParam(pwParam[i]);
             muteParam[i] = ParamWidget::create<CKD6>(Vec(knobX[i] + 8, knobY[i] + 8), module, Storm::MUTE_PARAM + i, 0.0f, 1.0f, 0.0f);
             addParam(muteParam[i]);
-            delayParam[i] = ParamWidget::create<Rogan1PSWhite>(Vec(knobX[i], knobY[i]), module, Storm::DELAY_PARAM + i, 0.001f, 10.0f, 0.001f);
+            delayParam[i] = ParamWidget::create<Rogan1PSWhite>(Vec(knobX[i], knobY[i]), module, Storm::DELAY_PARAM + i, 0.0f, 5.0f, 0.0f);
             addParam(delayParam[i]);
             
             addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(knobX[i] - 5, knobY[i] + 4), module, Storm::GEN_LIGHT + i));
