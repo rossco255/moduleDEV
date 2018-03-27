@@ -7,5 +7,4 @@
 //
 
 #include "StreamGen.hpp"
-//#include "BPMClock.hpp"
-
+#include "BPMClock.hpp"

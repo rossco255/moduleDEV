@@ -9,6 +9,10 @@
 #include "Template.hpp"
 #include <dsp/digital.hpp>
 #include <cstring>
+//#include "dsp/samplerate.hpp"
+//#include "dsp/ringbuffer.hpp"
+//#include "samplerate.h"
+
 
 namespace pulseStreamGen {
     
@@ -59,8 +63,8 @@ namespace pulseStreamGen {
         unsigned int pulseWidth;
         //enum PulseDurations;
         enum PulseDurations {
-            FIXED1MS,
-            FIXED5MS,       //fixed 5ms.
+            FIXED5MS,
+            FIXED25MS,       //fixed 5ms.
             FIXED100MS,    // Fixed 100 ms.
             GATE25,    // Gate 1/4 (25%).
             GATE33,    // Gate 1/3 (33%).
@@ -97,6 +101,8 @@ namespace pulseStreamGen {
         void pulseGenStep( );
         
         void coinToss(float);
+        
+        void delay (float);
         
         
     };

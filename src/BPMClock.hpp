@@ -31,6 +31,6 @@ namespace internalClock {
         int tempo;
         float frequency;
         float clockOutputValue;
-        void step(float);
+        void internalClkStep(float);
     };
 }

@@ -10,12 +10,8 @@
 
 
 struct Drizzle : Module {
-    
 #define NUM_GENS 4        //how many pusle stream generators are used in a module
 #define NUM_OUTS 1         //how many outputs do we have
-    
-
-    
     enum ParamIds {
         MODE_PARAM,
         MASTERCLK_PARAM,
@@ -48,49 +44,69 @@ struct Drizzle : Module {
     
     SchmittTrigger clkSwitchTrigger;
     bool clkSwitchParam = true;
-    
+    bool extClockConnected = false;
+    bool clockSynced = true;
+
     pulseStreamGen::streamGen *pulseStream[NUM_GENS];
-    
+    internalClock::BPMClock internalClk;
+
     Drizzle() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
         for (int i = 0; i < NUM_GENS; i++)
         {
-            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, inputs[CLK_INPUT].active);
+            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, clockSynced);
         }
     }
-    
     int row_size = sqrt(NUM_GENS);
-
-    
     void step() override;
 };
 
 void Drizzle::step(){
+    internalClk.internalClkStep(params[MASTERCLK_PARAM].value);
     
     if (clkSwitchTrigger.process(params[CLKSWITCH_PARAM].value)){
         clkSwitchParam ^= true;
     }
-    
     if (modeTrigger.process(params[MODE_PARAM].value)){
         masterKnobMode = (masterKnobMode + 1) % 4;
     }
-    
+    if (inputs[CLK_INPUT].active) {
+        extClockConnected = true;
+        clockSynced = true;
+    }
+    else if (clkSwitchParam){
+        extClockConnected = false;
+        clockSynced = true;
+    }
+    else{
+        extClockConnected = false;
+        clockSynced = false;
+    }
     
     for(int i = 0; i < NUM_GENS; i++){
-        pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
-        pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
-        pulseStream[i]->activeCLK = inputs[CLK_INPUT].active;
-        pulseStream[i]->clkStateChange();
-        pulseStream[i]->knobFunction();
         
-        if (pulseStream[i]->activeCLK){
+        if (extClockConnected){
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = inputs[CLK_INPUT].active;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
             pulseStream[i]->extBPMStep(inputs[CLK_INPUT].value);
         }
         
-        /*else if(clkSwitchParam){
-         still need to sort out the internal BPM clock for in here
-         
-         }*/
+        else if(clkSwitchParam){
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = clkSwitchParam;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
+            pulseStream[i]->extBPMStep(internalClk.clockOutputValue);
+        }
         else{
+            pulseStream[i]->pulseWidth = params[PW_PARAM + i].value;
+            pulseStream[i]->knobPosition = params[DIV_PARAM + i].value;
+            pulseStream[i]->activeCLK = clkSwitchParam;
+            pulseStream[i]->clkStateChange();
+            pulseStream[i]->knobFunction();
             pulseStream[i]->intBPMStep();
         }
         
@@ -103,32 +119,13 @@ void Drizzle::step(){
         lights[PROB_LIGHT + i].value = (params[PROB_PARAM + i].value);
     }
     
-    float gateSUM[NUM_OUTS] = {};
-    int outputCount = 0;
-    
-    
-    for (int i = 0; i < NUM_GENS; i += row_size )
+    float gateSUM = 0;
+    for (int i = 0; i < NUM_GENS; i ++)
     {
-        for (int j = i; j < (i + row_size); j++)
-        {
-            gateSUM[outputCount] += pulseStream[j]->streamOutput;
-        }
-        outputCount++;
+        gateSUM += pulseStream[i]->streamOutput;
     }
-    
-    for (int i = 0; i < row_size; i++){
-        for (int j = i; j < (NUM_GENS - row_size + (i + 1)) ; j += row_size){
-            gateSUM[outputCount] += pulseStream[j]->streamOutput;
-        }
-        outputCount++;
-    }
-    
-    for (int i = 0; i < NUM_OUTS; i++)
-    {
-        outputs[STREAM_OUTPUT + i].value = gateSUM[i] ? 7.0f : 0.0f;
-        lights[FINAL_LIGHT + i].setBrightnessSmooth(gateSUM[i] / 5.0f);
-    }
-    
+    outputs[STREAM_OUTPUT].value = gateSUM ? 7.0f : 0.0f;
+    lights[FINAL_LIGHT].setBrightnessSmooth(gateSUM / 5.0f);
 };
 
 struct DrizzleWidget : ModuleWidget {
@@ -136,27 +133,22 @@ struct DrizzleWidget : ModuleWidget {
     ParamWidget *probParam[NUM_GENS];
     ParamWidget *pwParam[NUM_GENS];
     ParamWidget *muteParam[NUM_GENS];
-    
-    
     DrizzleWidget(Drizzle *module) : ModuleWidget(module) {
-        
-        box.size = Vec(20 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        
+        box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
         {
             SVGPanel *panel = new SVGPanel();
             panel->box.size = box.size;
-            panel->setBackground(
-                                 SVG::load(assetPlugin(plugin, "res/Drizzle.svg")));
+            panel->setBackground(SVG::load(assetPlugin(plugin, "res/Drizzle.svg")));
             addChild(panel);
         }
         
-        addParam(ParamWidget::create<TL1105>(Vec(70, 20), module, Drizzle::MODE_PARAM, 0.0, 1.0, 0.0));
-        addParam(ParamWidget::create<TL1105>(Vec(100, 20), module, Drizzle::CLKSWITCH_PARAM, 0.0, 1.0, 0.0));
-        addParam(ParamWidget::create<Rogan1PSRed>(Vec(170, 20), module, Drizzle::MASTERCLK_PARAM, 0.0, 24.0, 12.0));
+        addParam(ParamWidget::create<TL1105>(Vec(50, 20), module, Drizzle::MODE_PARAM, 0.0, 1.0, 0.0));
+        addParam(ParamWidget::create<TL1105>(Vec(50, 40), module, Drizzle::CLKSWITCH_PARAM, 0.0, 1.0, 0.0));
+        addParam(ParamWidget::create<Rogan1PSRed>(Vec(70, 20), module, Drizzle::MASTERCLK_PARAM, 40.0, 250.0f, 120.0f));
         addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(168, 18), module, Drizzle::MASTERCLK_LIGHT));
         
         
-        static const float knobX[4] = {20, 20, 20, 20};
+        static const float knobX[4] = {10, 10, 10, 10};
         static const float knobY[4] = {70, 140, 210, 280};
         
         for (int i = 0; i < NUM_GENS; i++){
@@ -174,12 +166,12 @@ struct DrizzleWidget : ModuleWidget {
         }
         
         
-        addInput(Port::create<PJ301MPort>(Vec(24, 20), Port::INPUT, module, Drizzle::CLK_INPUT));
+        addInput(Port::create<PJ301MPort>(Vec(12, 20), Port::INPUT, module, Drizzle::CLK_INPUT));
         
-        addOutput(Port::create<PJ301MPort>(Vec(20, 330), Port::OUTPUT, module, Drizzle::STREAM_OUTPUT));
+        addOutput(Port::create<PJ301MPort>(Vec(12, 330), Port::OUTPUT, module, Drizzle::STREAM_OUTPUT));
      
         
-        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(18, 328), module, Drizzle::FINAL_LIGHT));
+        addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(10, 328), module, Drizzle::FINAL_LIGHT));
   
         
     }

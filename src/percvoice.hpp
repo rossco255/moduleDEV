@@ -11,18 +11,3 @@
 #include "dsp/filter.hpp"
 #include "dsp/digital.hpp"
 
-/*
-
-tri osc
-sin osc
-
-sin mod
-square mod
-saw mod
-noise mod (stepped?)
-env mod
-
-
-decay envelope
-vca
-*/

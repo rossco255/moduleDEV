@@ -69,32 +69,36 @@ namespace pulseStreamGen {
         if (stepGap == 0) {
             pTime = 0.1;
         }
+        
         else {
             // Reference duration in number of samples (when known stepGap). Variable-length pulse duration can be defined.
             switch (pulseWidth) {
                 case FIXED5MS:
                     pTime = 0.005f;    // Fixed 5 ms pulse.
                     break;
+                case FIXED25MS:
+                    pTime = 0.025f;    // Fixed 5 ms pulse.
+                    break;
                 case FIXED100MS:
                     pTime = 0.1f;    // Fixed 100 ms pulse.
                     break;
                 case GATE25:
-                    pTime = rate * 0.25f * (stepGap / engineGetSampleRate());    // Gate 1/4 (25%)
+                    pTime = rate * 0.5f * (stepGap / engineGetSampleRate());    // Gate 1/4 (25%)
                     break;
                 case GATE33:
-                    pTime = rate * (1.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 1/3 (33%)
+                    pTime = rate * (2.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 1/3 (33%)
                     break;
                 case SQUARE:
-                    pTime = rate * 0.5f * (stepGap / engineGetSampleRate());    // Square wave (50%)
+                    pTime = rate * 1.0f * (stepGap / engineGetSampleRate());    // Square wave (50%)
                     break;
                 case GATE66:
-                    pTime = rate * (2.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 2/3 (66%)
+                    pTime = rate * (4.0f / 3.0f) * (stepGap / engineGetSampleRate());    // Gate 2/3 (66%)
                     break;
                 case GATE75:
-                    pTime = rate * 0.75f * (stepGap / engineGetSampleRate());    // Gate 3/4 (75%)
+                    pTime = rate * 1.5f * (stepGap / engineGetSampleRate());    // Gate 3/4 (75%)
                     break;
                 case GATE95:
-                    pTime = rate * 0.95f * (stepGap / engineGetSampleRate());    // Gate 95%
+                    pTime = rate * 1.9f * (stepGap / engineGetSampleRate());    // Gate 95%
             }
         }
         return pTime;

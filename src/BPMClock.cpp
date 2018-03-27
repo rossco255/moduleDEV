@@ -16,6 +16,7 @@ namespace internalClock {
         freq = 1.0f;
         tempo = 0;
         frequency = 2.0f;
+        clockOutputValue = 0;
     }
     void BPMClock::setFreq(float freq_to_set)
     {
@@ -31,13 +32,13 @@ namespace internalClock {
         float sqr = phase < pw ? 1.0f : -1.0f;
         return sqr;
     }
-    void BPMClock::step(float tempoParam)
+    void BPMClock::internalClkStep(float tempoParam)
     {        
-        tempo = tempoParam;
+        tempo = roundf(tempoParam);
         frequency = tempo/60.0f;
-
+        setFreq(frequency*4);
             LFOstep(1.0 / engineGetSampleRate());
-            clockOutputValue = clamp(10.0f * sqr(), 0.0f, 10.0f);
+            clockOutputValue = clamp(5.0f * sqr(), 0.0f, 5.0f);
     }
 }
 
