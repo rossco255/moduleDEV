@@ -9,16 +9,17 @@
 #include "Template.hpp"
 #include <dsp/digital.hpp>
 #include <cstring>
-//#include "dsp/samplerate.hpp"
-//#include "dsp/ringbuffer.hpp"
-//#include "samplerate.h"
 
+#include "dsp/samplerate.hpp"
+#include "dsp/ringbuffer.hpp"
+#include "../../Fundamental/dep/include/samplerate.h"
+#include <sstream>
+#include <iomanip>
+#define HISTORY_SIZE (1<<21)
 
 namespace pulseStreamGen {
-    
     struct streamGen{
-        
-        streamGen(float, float, bool);
+        streamGen(float, float, bool, float);
 
         unsigned long currentStep;
         unsigned long previousStep;
@@ -31,9 +32,7 @@ namespace pulseStreamGen {
         
         bool muteState;
         SchmittTrigger muteTrigger;
-        
-        
-        
+		
         float knobPosition;
         unsigned int BPM;
         unsigned int previousBPM;
@@ -41,8 +40,7 @@ namespace pulseStreamGen {
         bool activeCLK;
         bool activeCLKPrevious;
         SchmittTrigger CLKInputPort;
-        
-        
+		
         //float list_fRatio[25];
         float list_fRatio[25] = {64.0f, 32.0f, 16.0f, 10.0f, 9.0f, 8.0f, 7.0f, 6.0f, 5.0f, 4.0f, 3.0f, 2.0f, 1.0f, 0.5f, 1.0f/3.0f, 0.25f, 0.2f, 1.0f/6.0f, 1.0f/7.0f, 0.125f, 1.0f/9.0f, 0.1f, 0.0625f, 0.03125f, 0.015625f};
         unsigned int rateRatioKnob;
@@ -74,36 +72,33 @@ namespace pulseStreamGen {
             GATE95,    // Gate 95%.
         };
         float pulseDuration;
-        
-        
-        
         SchmittTrigger gateTrigger;
         bool outcome;
-        
-        
         float streamOutput;
-        
-        
         void muteSwitchCheck(float);
-        
-        
         float GetPulsingTime(unsigned long int, float);
-        
         void clkStateChange( );
-    
-    
         void knobFunction( );
-        
         void extBPMStep(float);
-        
         void intBPMStep( );
-        
         void pulseGenStep( );
-        
         void coinToss(float);
-        
-        void delay (float);
-        
-        
     };
+	
+	struct pulseDelay {
+		pulseDelay (float, float);		//pulse input and delay time
+		
+		DoubleRingBuffer<float, HISTORY_SIZE> historyBuffer;
+		DoubleRingBuffer<float, 16> outBuffer;
+		SRC_STATE *src;
+		SRC_DATA srcData;
+
+		void process( );
+		
+		float in;
+		float delay;
+		float index;
+		float consume;
+		float wet;
+	};
 }

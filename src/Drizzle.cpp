@@ -12,6 +12,7 @@
 struct Drizzle : Module {
 #define NUM_GENS 4        //how many pusle stream generators are used in a module
 #define NUM_OUTS 1         //how many outputs do we have
+
     enum ParamIds {
         MODE_PARAM,
         MASTERCLK_PARAM,
@@ -20,6 +21,7 @@ struct Drizzle : Module {
         ENUMS(PROB_PARAM, NUM_GENS),
         ENUMS(PW_PARAM, NUM_GENS),
         ENUMS(MUTE_PARAM, NUM_GENS),
+        ENUMS(DELAY_PARAM, NUM_GENS),
         NUM_PARAMS
     };
     enum InputIds {
@@ -35,6 +37,7 @@ struct Drizzle : Module {
         ENUMS(GEN_LIGHT, NUM_GENS),
         ENUMS(PROB_LIGHT, NUM_GENS),
         ENUMS(MUTE_LIGHT, NUM_GENS),
+        ENUMS(DELAY_LIGHT, NUM_GENS),
         ENUMS(FINAL_LIGHT, NUM_OUTS),
         NUM_LIGHTS
     };
@@ -53,7 +56,7 @@ struct Drizzle : Module {
     Drizzle() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
         for (int i = 0; i < NUM_GENS; i++)
         {
-            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, clockSynced);
+            pulseStream[i] = new pulseStreamGen::streamGen(params[DIV_PARAM + i].value, params[PW_PARAM + i].value, clockSynced, params[DELAY_PARAM + i].value);
         }
     }
     int row_size = sqrt(NUM_GENS);
@@ -67,7 +70,7 @@ void Drizzle::step(){
         clkSwitchParam ^= true;
     }
     if (modeTrigger.process(params[MODE_PARAM].value)){
-        masterKnobMode = (masterKnobMode + 1) % 4;
+        masterKnobMode = (masterKnobMode + 1) % 5;
     }
     if (inputs[CLK_INPUT].active) {
         extClockConnected = true;
@@ -113,6 +116,7 @@ void Drizzle::step(){
         pulseStream[i]->pulseGenStep();
         pulseStream[i]->coinToss(params[PROB_PARAM + i].value);
         pulseStream[i]->muteSwitchCheck(params[MUTE_PARAM + i].value);
+       // pulseStream[i]->pulseDelay(params[DELAY_PARAM + i].value);
         pulseStream[i]->streamOutput =( (pulseStream[i]->sendingOutput) && (pulseStream[i]->muteState) )? 5.0f : 0.0f;
         lights[GEN_LIGHT + i].setBrightnessSmooth(pulseStream[i]->streamOutput / 5.0f);
         lights[MUTE_LIGHT + i].value = (pulseStream[i]->muteState);
@@ -133,6 +137,7 @@ struct DrizzleWidget : ModuleWidget {
     ParamWidget *probParam[NUM_GENS];
     ParamWidget *pwParam[NUM_GENS];
     ParamWidget *muteParam[NUM_GENS];
+    ParamWidget *delayParam[NUM_GENS];
     DrizzleWidget(Drizzle *module) : ModuleWidget(module) {
         box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
         {
@@ -160,6 +165,9 @@ struct DrizzleWidget : ModuleWidget {
             addParam(pwParam[i]);
             muteParam[i] = ParamWidget::create<CKD6>(Vec(knobX[i] + 8, knobY[i] + 8), module, Drizzle::MUTE_PARAM + i, 0.0f, 1.0f, 0.0f);
             addParam(muteParam[i]);
+            delayParam[i] = ParamWidget::create<Rogan1PSWhite>(Vec(knobX[i], knobY[i]), module, Drizzle::DELAY_PARAM + i, 0.0, 1.0, 0.0);
+            addParam(delayParam[i]);
+            
             addChild(ModuleLightWidget::create<SmallLight<RedLight>>(Vec(knobX[i] - 2, knobY[i] - 2), module, Drizzle::GEN_LIGHT + i));
             addChild(ModuleLightWidget::create<SmallLight<GreenLight>>(Vec(knobX[i] + 40, knobY[i] - 2), module, Drizzle::MUTE_LIGHT + i));
             addChild(ModuleLightWidget::create<SmallLight<BlueLight>>(Vec(knobX[i] - 2, knobY[i] + 40), module, Drizzle::PROB_LIGHT + i));
@@ -184,6 +192,7 @@ struct DrizzleWidget : ModuleWidget {
             probParam[i]->visible = (module->masterKnobMode == 1);
             pwParam[i]->visible = (module->masterKnobMode == 2);
             muteParam[i]->visible = (module->masterKnobMode == 3);
+            delayParam[i]->visible = (module->masterKnobMode == 4);
         }
         ModuleWidget::step();
     }

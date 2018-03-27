@@ -11,7 +11,7 @@
 
 namespace pulseStreamGen {
     
-    streamGen::streamGen (float divValue, float pwValue, bool clkInputActive){
+    streamGen::streamGen (float divValue, float pwValue, bool clkInputActive, float delayValue){
         currentStep = 0;
         previousStep = 0;
         nextPulseStep = 0;
@@ -289,6 +289,41 @@ namespace pulseStreamGen {
         }
         sendingOutput = outcome ? sendingOutput : 0.0;
     }
-    
+	
+	pulseDelay::pulseDelay (float delayParamValue, float streamOutput){
+		in = streamOutput;
+		delay = clamp(delayParamValue, 0.001f, 10.0f);
+	}
+	
+	void pulseDelay::process(){
+		index = delay * engineGetSampleRate();
 
+		if (!historyBuffer.full()) {
+			historyBuffer.push(in);
+		}
+
+		consume = index - historyBuffer.size();
+
+		if (outBuffer.empty()) {
+			double ratio = 1.f;
+			if (fabsf(consume) >= 16.f) {
+				ratio = powf(10.f, clamp(consume / 10000.f, -1.f, 1.f));
+			}
+			
+			srcData.data_in = (const float*) historyBuffer.startData();
+			srcData.data_out = (float*) outBuffer.endData();
+			srcData.input_frames = min(historyBuffer.size(), 16);
+			srcData.output_frames = outBuffer.capacity();
+			srcData.end_of_input = false;
+			srcData.src_ratio = ratio;
+			src_process(src, &srcData);
+			historyBuffer.startIncr(srcData.input_frames_used);
+			outBuffer.endIncr(srcData.output_frames_gen);
+		}
+		
+		wet = 0.0f;
+		if (!outBuffer.empty()) {
+			wet = outBuffer.shift();
+		}
+	}
 }
